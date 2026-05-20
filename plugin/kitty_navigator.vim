@@ -42,15 +42,23 @@ function! s:KittyCommand(args)
   return system(cmd)
 endfunction
 
-call s:KittyCommand('set-user-vars IS_VIM=true')
+let s:kitty_accessible = 0
+let s:output = s:KittyCommand('set-user-vars IS_VIM=true')
+if v:shell_error == 0
+  let s:kitty_accessible = 1
+else
+  echohl ErrorMsg | echom printf('"kitten @ ..." failed with exit code %s and output: %s', string(v:shell_error), s:output) | echohl None
+endif
 
 let s:kitty_is_last_pane = 0
 
-augroup kitty_navigator
-  au!
-  autocmd WinEnter * let s:kitty_is_last_pane = 0
-  autocmd VimLeavePre * call s:KittyCommand('set-user-vars IS_VIM=false')
-augroup END
+if s:kitty_accessible
+  augroup kitty_navigator
+    au!
+    autocmd WinEnter * let s:kitty_is_last_pane = 0
+    autocmd VimLeavePre * call s:KittyCommand('set-user-vars IS_VIM=false')
+  augroup END
+endif
 
 function! s:KittyIsInStackLayout()
   let json_str = s:KittyCommand('ls --match id:' .. getenv("KITTY_WINDOW_ID"))
@@ -59,6 +67,10 @@ function! s:KittyIsInStackLayout()
 endfunction
 
 function! s:KittyAwareNavigate(direction)
+  if !s:kitty_accessible
+    call s:VimNavigate(a:direction)
+    return
+  endif
   let nr = winnr()
   let kitty_last_pane = (a:direction == 'p' && s:kitty_is_last_pane)
   if !kitty_last_pane
